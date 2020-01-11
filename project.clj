@@ -32,8 +32,8 @@
                  [org.apache.xmlbeans/xmlbeans "3.1.0"]
                  [org.apache.commons/commons-collections4 "4.2"]
                  [org.apache.commons/commons-compress"1.18"]
-                 [org.apache.poi/ooxml-schemas "1.4"]
-                 [org.postgresql/postgresql "42.2.5"]]
+                 [org.apache.poi/ooxml-schemas "1.4"]]
+                ;; [org.postgresql/postgresql "42.2.5"]]
 
 
 :repl-options {:nrepl-middleware

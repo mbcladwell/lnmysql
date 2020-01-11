@@ -1,6 +1,4 @@
--- -*- mode: sql; sql-product: mysql; -*-
-
---https://postgres.cz/wiki/PostgreSQL_SQL_Tricks
+-- -*- mode: sql; sql-product: mysql; user:plapan_ln_admin; database:plapan_lndb -*-
 
 -- assay_result:    assay_run_id  plate(plate_order)  well  response  bkgrnd_sub    norm   norm_pos 
 -- assay_run:       id  assay_run_sys_name  assay_run_name  assay_type_id  plate_set_id  plate_layout_name_id

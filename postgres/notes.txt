@@ -1,0 +1,23 @@
+start a command prompt as administrator
+search for "cmd" then Ctrl-Shift-Enter
+
+"c:\Program Files (x86)\PostgreSQL\9.2\bin\pg_ctl.exe" start -D "c:\Program Files (x86)\PostgreSQL\9.2\data"
+"c:\Program Files (x86)\PostgreSQL\9.2\bin\pg_ctl.exe" stop -D "c:\Program Files (x86)\PostgreSQL\9.2\data"
+
+
+Log in to psql
+"Program Files (x86)\PostgreSQL\9.2\bin\psql.exe" -U postgres
+
+
+SELECT plateset_sys_name AS PlateSetID, plate_set_name As Name FROM plate_set WHERE project_id = (select id from project where project_sys_name like 'PRJ-1');
+
+SELECT plate_sys_name AS PlateID, plate_type_name As PlateType FROM plate, plate_type 
+WHERE plate_set_id = (select id from plate_set where plateset_sys_name like 'PS-1') AND plate.plate_type_id = plate_type.id;
+
+SELECT well_name AS Well, sample_sys_name As Sample FROM well, sample, plate WHERE well.plate_id = (select id from plate where plate_sys_name like ?) 
+AND well.sample_id = sample.id AND well.plate_id = plate.id;
+
+
+\i c:/temp/postgresql/create_tables.sql
+\i c:/temp/postgresql/create_data.sql
+\i c:/temp/postgresql/create_functions.sql

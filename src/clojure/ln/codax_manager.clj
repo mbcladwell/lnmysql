@@ -31,38 +31,6 @@
                                   })))
  (c/close-database! props)))
 
-(defn set-props-to-elephantsql []
- (let [props (c/open-database! "ln-props")]
-  (c/with-write-transaction [props tx]
-    (-> tx
-        (c/assoc-at [:assets :conn] {:source "test"
-                                     :dbtype "postgresql"
-  	                             :dbname "klohymim"
- 	                             :host  "raja.db.elephantsql.com"
-  	                             :port  5432
-  	                             :user  "klohymim"
-  	                             :password  "hwc3v4_rbkT-1EL2KI-JBaqFq0thCXM_"
- 	                             :sslmode  false
-                                     :auto-login true
- 	                             :help-url-prefix  "http://labsolns.com/software/" 
-                                     })
-        (c/assoc-at [:assets :session] {:project-id 1
-	                                :project-sys-name "PRJ-1"
-	                                :user-id 3
-                                        :user-name "klohymim"
-                                        :plateset-id 1
-                                        :plateset-sys-name ""
-	                                :user-group-id 2
-                                        :user-group "user"
-	                                :session-id nil
-                                        :working-dir ""
-                                        :authenticated true
-                                        })))
-  (c/close-database! props)))
-
-        ;;psql postgres://klohymim:hwc3v4_rbkT-1EL2KI-JBaqFq0thCXM_@raja.db.elephantsql.com:5432/klohymim
-
-;;(set-props-to-elephantsql)
 
 (defn set-props-to-hostgator []
  (let [props (c/open-database! "ln-props")]
