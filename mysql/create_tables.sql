@@ -1,172 +1,46 @@
 
 
-CREATE EXTENSION pgcrypto;
-CREATE EXTENSION intarray;
 
+-- -*- mode: sql; sql-product: mysql; server: 192.254.187.215; user: plapan_ln_admin; password: welcome; database: plapan_lndb; -*-
 
-DROP  FUNCTION IF EXISTS calc_by_row_num_func()  CASCADE;
-
-CREATE FUNCTION calc_by_row_num_func()
-  RETURNS trigger AS
-  $BODY$
-
-BEGIN
- NEW.by_row := NEW.total_col_count*(NEW.row_num -1) + CAST(NEW.col AS integer);
- IF  (CAST(NEW.col AS INTEGER)%2 = 1) AND ( NEW.row_num%2 = 1)  THEN
-    NEW.quad :=1;
-    elsif (CAST(NEW.col AS INTEGER)%2 = 0) AND ( NEW.row_num%2 = 1)  THEN
-    NEW.quad :=2;
-    ELSIF (CAST(NEW.col AS INTEGER)%2 = 1) AND ( NEW.row_num%2 = 0)  THEN
-    NEW.quad :=3;
-    ELSE
-    NEW.quad :=4;
-    END IF;
-    
- RETURN NEW;
-END;
-$BODY$
-  LANGUAGE plpgsql;
-
-DROP TRIGGER IF EXISTS calculate_by_row_number ON well_numbers;
-
-DROP TABLE IF EXISTS well_numbers CASCADE;
-CREATE TABLE well_numbers(plate_format INTEGER,
-			well_name VARCHAR(5), 
-                           row VARCHAR(2),
-			   row_num INTEGER,
-                           col VARCHAR(2),
-			   total_col_count INTEGER,
-                           by_row INTEGER,
-                           by_col INTEGER,
-                           quad INTEGER,
-			   parent_well VARCHAR(5));
-
-CREATE TRIGGER calculate_by_row_number
-before INSERT ON well_numbers
-FOR EACH row EXECUTE PROCEDURE calc_by_row_num_func();
-CREATE INDEX ON well_numbers(by_col);
-
-
------well_numbers-------------------------
-
-DROP FUNCTION IF EXISTS fill_well_numbers_a();
-
-CREATE OR REPLACE FUNCTION fill_well_numbers_a()
-  RETURNS void AS
-$BODY$
-DECLARE
-   plt_size INTEGER;
-   row_holder   VARCHAR[] := ARRAY['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','AA','AB','AC','AD','AE','AF'];
-   row_names VARCHAR[];
-   r VARCHAR(2);	
-   col_holder   VARCHAR[] := ARRAY['01','02','03','04','05','06','07','08','09','10','11','12','13','14','15','16','17','18','19','20','21','22','23','24','25','26','27','28','29','30','31','32','33','34','35','36','37','38','39','40','41','42','43','44','45','46','47','48'];
-   col_names VARCHAR[];
-   colm VARCHAR(2);	
-   i INTEGER;
-   rownum INTEGER;
-BEGIN
-
-   plt_size := 96;
-   row_names := row_holder[1:8];
-   col_names := col_holder[1:12];
-   i := 1;
-   rownum := 1;
-   --total_col_count*(rownum -1) + colnum
-
-    FOREACH colm IN ARRAY col_names
-   LOOP
-      FOREACH r  IN ARRAY row_names
-     LOOP
-       INSERT INTO well_numbers(plate_format, well_name, ROW, row_num, col, total_col_count, by_col, by_row, quad, parent_well )
-                          VALUES( plt_size, concat(r,colm), r, rownum, colm, 12, i, NULL , NULL, NULL);
-       i := i +1;
-       IF rownum = 8 THEN rownum :=1; ELSE rownum := rownum+1; END if;
-   END LOOP;
-   END LOOP;
-
-   plt_size := 384;
-   row_names := row_holder[1:16];
-   col_names := col_holder[1:24];
-   i := 1;
-   rownum := 1;
-
-   
-    FOREACH colm IN ARRAY col_names
-   LOOP
-      FOREACH r  IN ARRAY row_names
-     LOOP
-       INSERT INTO well_numbers(plate_format, well_name, ROW, row_num, col,total_col_count,  by_col, quad, parent_well )
-       VALUES( plt_size, concat(r,colm), r, rownum, colm, 24, i, NULL, NULL);
-       i := i +1;
-       IF rownum = 16 THEN rownum :=1; ELSE rownum := rownum+1; END if;
-   END LOOP;
-   END LOOP;
-
-   plt_size := 1536;
-   row_names := row_holder[1:32];
-   col_names := col_holder[1:48];
-   i := 1;
-   rownum := 1;
-
-   
-    FOREACH colm IN ARRAY col_names
-   LOOP
-      FOREACH r  IN ARRAY row_names
-     LOOP
-       INSERT INTO well_numbers(plate_format, well_name, row,row_num, col, total_col_count,  by_col, quad, parent_well ) VALUES( plt_size, concat(r,colm), r, rownum, colm, 48, i, NULL, NULL);
-       i := i +1;
-       IF rownum = 32 THEN rownum :=1; ELSE rownum := rownum+1; END if;
-   END LOOP;
-   END LOOP;
-
-
-END;
-$BODY$
-  LANGUAGE plpgsql VOLATILE;
-
-SELECT fill_well_numbers_a();
-
-DROP TRIGGER IF EXISTS calculate_by_row_number ON well_numbers;
-DROP  FUNCTION IF EXISTS calc_by_row_num_func()  CASCADE;
-DROP FUNCTION IF EXISTS fill_well_numbers_a();
-
+DROP TABLE IF EXISTS lnuser_groups, lnuser, lnsession, project, assay_result, assay_run, assay_type, hit_list, hit_sample, layout_source_dest, plate, plate_set, well, sample, plate_format, plate_layout, plate_layout_name, plate_type, plate_plate_set, rearray_pairs, well_numbers, well_sample, well_type, worklists CASCADE;
 
 --users------------------------------------------------------
 
-DROP TABLE IF EXISTS pmuser_groups CASCADE;
-CREATE TABLE pmuser_groups
+DROP TABLE IF EXISTS lnuser_groups CASCADE;
+CREATE TABLE lnuser_groups
 (id SERIAL PRIMARY KEY,
-        usergroup VARCHAR(30),
-	updated TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT current_timestamp);
+        usergroup VARCHAR(250),
+	updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP);
 
-INSERT INTO pmuser_groups (usergroup) VALUES ('administrator');
-INSERT INTO pmuser_groups (usergroup) VALUES ('user');
+INSERT INTO lnuser_groups (usergroup) VALUES ('administrator');
+INSERT INTO lnuser_groups (usergroup) VALUES ('user');
 
-DROP TABLE IF EXISTS pmuser CASCADE;
-CREATE TABLE pmuser
+DROP TABLE IF EXISTS lnuser CASCADE;
+CREATE TABLE lnuser
 (id SERIAL PRIMARY KEY,
-        usergroup INTEGER,
-	pmuser_name VARCHAR(30) NOT NULL UNIQUE,
+        usergroup_id INTEGER,
+	lnuser_name VARCHAR(250) NOT NULL UNIQUE,
 	tags VARCHAR(30) ,
         password VARCHAR(64) NOT NULL,
-	updated TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT current_timestamp);
+	updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+	FOREIGN KEY (usergroup_id) REFERENCES lnuser_groups(id));
 
---INSERT INTO pmuser ( pmuser_name, email, permissions, password) VALUES ('admin1', 'pmadmin@postgres', 1, crypt('welcome',gen_salt('bf')));
-INSERT INTO pmuser ( pmuser_name, tags, usergroup, password) VALUES ('admin', 'pmadmin@postgres', 1, 'welcome');
-INSERT INTO pmuser ( pmuser_name, tags, usergroup, password) VALUES ('user', 'pmadmin2@postgres', 1, 'welcome');
-
-
-select * from pmuser;
+INSERT INTO lnuser ( lnuser_name, tags, usergroup_id, password) VALUES ('admin', '', 1, 'welcome');
+INSERT INTO lnuser ( lnuser_name, tags, usergroup_id, password) VALUES ('user', '', 2, 'welcome');
 
 
-DROP TABLE IF EXISTS pmsession CASCADE;
-DROP SEQUENCE IF EXISTS  pmsession_id_seq CASCADE;
-DROP INDEX IF EXISTS pmsession_pkey CASCADE;
-CREATE TABLE pmsession
+select * from lnuser;
+
+
+DROP TABLE IF EXISTS lnsession CASCADE;
+DROP SEQUENCE IF EXISTS  lnsession_id_seq CASCADE;
+DROP INDEX IF EXISTS lnsession_pkey CASCADE;
+CREATE TABLE lnsession
 (id SERIAL PRIMARY key,
-        pmuser_id INTEGER,
-	updated TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT current_timestamp,
-        FOREIGN KEY (pmuser_id) REFERENCES pmuser(id));
+        lnuser_id INTEGER,
+	updated TIMESTAMP DEFAULT current_timestamp,
+        FOREIGN KEY (lnuser_id) REFERENCES lnuser(id));
 
 
 
@@ -176,13 +50,12 @@ DROP INDEX IF EXISTS project_pkey CASCADE;
 CREATE TABLE project
 (id SERIAL PRIMARY KEY,
         project_sys_name VARCHAR(30),
-        descr VARCHAR(30),
-	project_name VARCHAR(30),
-        pmuser_id INTEGER,
-	updated TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT current_timestamp,
-        FOREIGN KEY (pmuser_id) REFERENCES pmuser(id));
+        descr VARCHAR(250),
+	project_name VARCHAR(60),
+        lnsession_id INTEGER,
+	updated TIMESTAMP DEFAULT current_timestamp,
+        FOREIGN KEY (lnsession_id) REFERENCES lnsession(id));
 
-CREATE INDEX ON project(pmuser_id);
 
 ------------------------------------------------
 DROP TABLE IF EXISTS plate_format CASCADE;
@@ -227,8 +100,10 @@ CREATE TABLE plate_layout_name (
 		source_dest VARCHAR(30),
 		FOREIGN KEY (plate_format_id) REFERENCES plate_format(id));
 
-CREATE INDEX ON plate_layout_name(plate_format_id);
-	
+CREATE INDEX pln_pfid ON plate_layout_name(plate_format_id);
+
+
+
 -- 96 well plate 4 controls
 INSERT INTO plate_layout_name (sys_name, name, descr, plate_format_id, replicates, targets, use_edge, num_controls, control_loc, source_dest) VALUES ('LYT-1','4 controls col 12', '1S1T', 96,1,1,1,4,'E12-H12','source');
 
@@ -393,7 +268,7 @@ INSERT INTO layout_source_dest( src, dest ) VALUES (43,46);
 INSERT INTO layout_source_dest( src, dest ) VALUES (43,47);
 
 
------------------------------
+-- ---------------------------
 DROP TABLE IF EXISTS plate_set CASCADE;
 DROP SEQUENCE IF EXISTS plate_set_id_seq;
 
@@ -408,16 +283,18 @@ CREATE TABLE plate_set
         plate_type_id INTEGER,
         project_id INTEGER,
 	plate_layout_name_id INTEGER,
-	updated TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT current_timestamp,
+	lnsession_id INTEGER,
+	updated TIMESTAMP DEFAULT current_timestamp,
         FOREIGN KEY (plate_type_id) REFERENCES plate_type(id),
         FOREIGN KEY (plate_format_id) REFERENCES plate_format(id),
         FOREIGN KEY (project_id) REFERENCES project(ID),
+    FOREIGN KEY (lnsession_id) REFERENCES lnsession(ID),
 	FOREIGN KEY (plate_layout_name_id) REFERENCES plate_layout_name(id));
 
-CREATE INDEX ON plate_set(barcode);
-CREATE INDEX ON plate_set(plate_format_id);
-CREATE INDEX ON plate_set(plate_type_id);
-CREATE INDEX ON plate_set(project_id);
+CREATE INDEX ps_bc ON plate_set(barcode);
+CREATE INDEX ps_pfid ON plate_set(plate_format_id);
+CREATE INDEX ps_ptid ON plate_set(plate_type_id);
+CREATE INDEX ps_prjid ON plate_set(project_id);
 
 
 
@@ -428,18 +305,19 @@ DROP TABLE IF EXISTS sample CASCADE;
 
 CREATE TABLE plate (id SERIAL PRIMARY KEY,
 		plate_sys_name VARCHAR(30),
+		barcode VARCHAR(250),
         	plate_type_id INTEGER,
 		plate_format_id INTEGER,
 		plate_layout_name_id INTEGER,
-	        updated TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT current_timestamp,
+	        updated TIMESTAMP DEFAULT current_timestamp,
                 FOREIGN KEY (plate_type_id) REFERENCES plate_type(id),
 		FOREIGN KEY (plate_format_id) REFERENCES plate_format(id), 
 		FOREIGN KEY (plate_layout_name_id) REFERENCES plate_layout_name(id));
 
-CREATE INDEX ON plate(plate_type_id);
-CREATE INDEX ON plate(plate_format_id);
+CREATE INDEX p_ptid ON plate(plate_type_id);
+CREATE INDEX p_pfid ON plate(plate_format_id);
 
-----------------------------------------------------------------------------
+-- --------------------------------------------------------------------------
 DROP TABLE IF EXISTS plate_plate_set CASCADE;
 
 CREATE TABLE plate_plate_set (
@@ -449,18 +327,18 @@ CREATE TABLE plate_plate_set (
                 FOREIGN KEY (plate_set_id) REFERENCES plate_set(id),
                 FOREIGN KEY (plate_id) REFERENCES plate(id));
 
-CREATE INDEX ON plate_plate_set(plate_set_id);
-CREATE INDEX ON plate_plate_set(plate_id);
+CREATE INDEX pps_psid ON plate_plate_set(plate_set_id);
+CREATE INDEX pps_pid ON plate_plate_set(plate_id);
  
-----------------------------------------------------------------------------
+-- --------------------------------------------------------------------------
 
 CREATE TABLE sample (id SERIAL PRIMARY KEY,
 		sample_sys_name VARCHAR(20),
 		project_id INTEGER,
-                accs_id INTEGER,
+                accs_id VARCHAR(250),
 		FOREIGN KEY (project_id) REFERENCES project(id));
 
-CREATE INDEX ON sample(project_id);
+CREATE INDEX s_prjid ON sample(project_id);
 
 
 DROP TABLE IF EXISTS well CASCADE;
@@ -469,9 +347,9 @@ CREATE TABLE well (id SERIAL PRIMARY KEY,
 		plate_id INTEGER,
 		FOREIGN KEY (plate_id) REFERENCES plate(id));
 
-CREATE INDEX ON well(plate_id);
+CREATE INDEX w_pid ON well(plate_id);
 
-----------------------------------------------------------------------------
+-- --------------------------------------------------------------------------
 DROP TABLE IF EXISTS well_sample CASCADE;
 
 CREATE TABLE well_sample (
@@ -480,22 +358,25 @@ CREATE TABLE well_sample (
                 FOREIGN KEY (well_id) REFERENCES well(id),
                 FOREIGN KEY (sample_id) REFERENCES sample(id));
 
-CREATE INDEX ON well_sample(well_id);
-CREATE INDEX ON well_sample(sample_id);
+CREATE INDEX ws_wid ON well_sample(well_id);
+CREATE INDEX ws_sid ON well_sample(sample_id);
 
 
 ----------------------------
 DROP TABLE IF EXISTS hit_list CASCADE;
 
-CREATE TABLE hit_list
-(id SERIAL PRIMARY KEY,
- hitlist_sys_name VARCHAR(30),
+CREATE TABLE hit_list (id SERIAL PRIMARY KEY,
+                       hitlist_sys_name VARCHAR(30),
+		       hitlist_name VARCHAR(250),
         descr VARCHAR(250),
-	updated TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT current_timestamp,
- project_id INTEGER,
- FOREIGN KEY (project_id) REFERENCES project(id));
+	updated TIMESTAMP DEFAULT current_timestamp,
+ lnsession_id INTEGER,
+ assay_run_id INTEGER,
+ n INTEGER,
+ FOREIGN KEY (lnsession_id) REFERENCES lnsession(id),
+ FOREIGN KEY (assay_run_id) REFERENCES assay_run(id));
 
-CREATE INDEX ON hit_list(project_id);
+CREATE INDEX hl_prjid ON hit_list(project_id);
 
 
 DROP TABLE IF EXISTS hit_sample CASCADE;
@@ -507,10 +388,10 @@ CREATE TABLE hit_sample
  FOREIGN KEY (hitlist_id) REFERENCES hit_list(id),
  FOREIGN KEY (sample_id) REFERENCES sample(id));
 
-CREATE INDEX ON hit_sample(hitlist_id);
-CREATE INDEX ON hit_sample(sample_id);
+CREATE INDEX hs_hlid ON hit_sample(hitlist_id);
+CREATE INDEX hs_sid ON hit_sample(sample_id);
 
-----------------------------
+-- --------------------------
 
 
 DROP TABLE IF EXISTS assay_run CASCADE;
@@ -522,14 +403,16 @@ CREATE TABLE assay_run (id serial PRIMARY KEY,
 		assay_type_id INTEGER,
                 plate_set_id INTEGER,
 		plate_layout_name_id INTEGER,
-                updated  TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT current_timestamp,
+		lnsession_id INTEGER,
+                updated  TIMESTAMP DEFAULT current_timestamp,
                FOREIGN KEY (plate_set_id) REFERENCES plate_set(id),
                FOREIGN KEY (plate_layout_name_id) REFERENCES plate_layout_name(id),
-		FOREIGN KEY (assay_type_id) REFERENCES assay_type(id));
+	       FOREIGN KEY (lnsession_id) REFERENCES lnsession(id),
+	 	FOREIGN KEY (assay_type_id) REFERENCES assay_type(id));
 
-CREATE INDEX ON assay_run(assay_type_id);
-CREATE INDEX ON assay_run(plate_set_id);
-CREATE INDEX ON assay_run(plate_layout_name_id);
+CREATE INDEX ar_atid ON assay_run(assay_type_id);
+CREATE INDEX ar_psid ON assay_run(plate_set_id);
+CREATE INDEX ar_plnid ON assay_run(plate_layout_name_id);
 
 
 DROP TABLE IF EXISTS assay_type CASCADE;
@@ -552,14 +435,16 @@ CREATE TABLE assay_result (
                 response REAL,
                 bkgrnd_sub REAL,
 		norm REAL,        -- max unknown signal set to 1
-		norm_pos REAL,    --positive control set to 1
+		norm_pos REAL,    -- positive control set to 1
+		p_enhance REAL,
+			updated TIMESTAMP DEFAULT current_timestamp,
 		FOREIGN KEY (assay_run_id) REFERENCES assay_run(id));
 		
 
-CREATE INDEX ON assay_result(assay_run_id);
+CREATE INDEX ar_arid  ON assay_result(assay_run_id);
 
 
-----------------------------
+-- --------------------------
 
 
 DROP TABLE IF EXISTS well_type CASCADE;
@@ -571,6 +456,8 @@ INSERT INTO well_type (name) VALUES ('unknown');
 INSERT INTO well_type (name) VALUES ('positive');
 INSERT INTO well_type (name) VALUES ('negative');
 INSERT INTO well_type (name) VALUES ('blank');
+INSERT INTO well_type (name) VALUES ('edge');
+
 
 
 DROP TABLE IF EXISTS plate_layout CASCADE;
@@ -579,16 +466,51 @@ CREATE TABLE plate_layout (
 		plate_layout_name_id INTEGER,
                 well_by_col INTEGER,
                 well_type_id INTEGER,
-		replicates VARCHAR(2),
-		target VARCHAR(2),
+		replicates INTEGER,
+		target INTEGER,
 		FOREIGN KEY (plate_layout_name_id) REFERENCES plate_layout_name(id),
                 FOREIGN KEY (well_type_id) REFERENCES well_type(id));
 
-CREATE INDEX ON plate_layout(plate_layout_name_id);
-CREATE INDEX ON plate_layout(well_type_id);
-CREATE INDEX ON plate_layout(well_by_col);
+CREATE INDEX pl_plnid  ON plate_layout(plate_layout_name_id);
+CREATE INDEX pl_wtid ON plate_layout(well_type_id);
+CREATE INDEX pl_wbc ON plate_layout(well_by_col);
+
+DROP TABLE IF EXISTS rearray_pairs CASCADE;
+
+CREATE TABLE rearray_pairs(
+id SERIAL PRIMARY KEY,
+src INTEGER,
+dest INTEGER);
+
+DROP TABLE IF EXISTS worklists CASCADE;
+
+CREATE TABLE worklists(
+rearray_pairs_id INTEGER,
+                            sample_id INTEGER,
+                           source_plate varchar(10),
+                           source_well INTEGER,
+                           dest_plate varchar(10),
+                           dest_well INTEGER,
+                           FOREIGN KEY (rearray_pairs_id) REFERENCES rearray_pairs(id)  ON DELETE CASCADE,
+                           FOREIGN KEY (sample_id) REFERENCES sample(id));
 
 
------------------------------------
+DROP TABLE IF EXISTS well_numbers CASCADE;
+ CREATE TABLE well_numbers(
+                             plate_format INTEGER,
+                           well_name varchar(5),
+                            row_name varchar(5),
+                           row_num INTEGER,
+                           col varchar(5),
+                           total_col_count INTEGER,
+                           by_row INTEGER,
+                           by_col INTEGER,
+                           quad INTEGER,
+                           parent_well INTEGER);
 
-\i ./plate_layouts_for_import.sql
+CREATE INDEX wn_bc ON well_numbers(by_col);
+-- ---------------------------------
+
+\. /home/mbc/projects/lnmysql/mysql/plate_layouts_for_import_mysql.SQL
+\. /home/mbc/projects/lnmysql/mysql/well_numbers_for_import_mysql.SQL
+
