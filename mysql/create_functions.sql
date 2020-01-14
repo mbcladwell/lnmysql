@@ -1,3 +1,4 @@
+-- -*- mode: sql; sql-product: mysql; server: 192.254.187.215; user: plapan_ln_admin; password: welcome; database: plapan_lndb; -*-
 
 ---User
 
@@ -39,16 +40,17 @@ DELIMITER ;
 
 
 DROP PROCEDURE IF EXISTS  new_sample;
-DELIMITER  //
-CREATE procedure new_sample(IN _project_id INTEGER,  IN  _accs_id VARCHAR(250))
-BEGIN
-DECLARE v_id INTEGER DEFAULT 0;
-   
-   INSERT INTO sample( project_id, accs_id)
-   VALUES (_project_id,   _accs_id);
-   set v_id = LAST_INSERT_ID();
 
-    UPDATE sample SET sample_sys_name = CONCAT('SPL-',v_id) WHERE id=v_id;
+DELIMITER  //
+CREATE procedure new_sample(IN _project_id INTEGER, IN _well_id INTEGER, IN  _accs_id VARCHAR(250))
+BEGIN
+DECLARE s_id INTEGER DEFAULT 0;
+   
+   INSERT INTO sample( project_id, accs_id) VALUES (_project_id,   _accs_id);
+   set s_id = LAST_INSERT_ID();
+
+    UPDATE sample SET sample_sys_name = CONCAT('SPL-',s_id) WHERE id=s_id;
+    INSERT INTO  well_sample( well_id, sample_id) VALUES (_well_id, s_id);
 END //
 DELIMITER ;
 
@@ -58,9 +60,9 @@ DELIMITER ;
 DROP PROCEDURE IF EXISTS new_plate;
 
 DELIMITER  //
-CREATE procedure new_plate(IN _plate_type_id INTEGER, IN _plate_set_id INTEGER, IN _plate_format_id INTEGER, IN _plate_layout_name_id INTEGER,  IN _include_sample BOOLEAN)
+CREATE procedure new_plate(IN _plate_type_id INTEGER, IN _plate_set_id INTEGER, IN _plate_format_id INTEGER, IN _plate_layout_name_id INTEGER,  IN _include_sample BOOLEAN, OUT plt_id INTEGER)
 BEGIN  
-  DECLARE plt_id INTEGER;
+  -- DECLARE plt_id INTEGER;
   DECLARE  ps_id INTEGER DEFAULT _plate_set_id;
   DECLARE  pf_id INTEGER;
   DECLARE  w_id INTEGER;
@@ -69,6 +71,7 @@ BEGIN
   DECLARE  spl_include BOOLEAN DEFAULT _include_sample;
   DECLARE   w INTEGER DEFAULT 1;	
 DECLARE wt_id INTEGER;
+DECLARE make_sample BOOLEAN;
 
    INSERT INTO plate(plate_type_id,   plate_format_id, plate_layout_name_id)
    VALUES (_plate_type_id,  _plate_format_id, _plate_layout_name_id);
@@ -82,12 +85,16 @@ DECLARE wt_id INTEGER;
        INSERT INTO well(by_col, plate_id) VALUES (w, plt_id);
        SET w_id = LAST_INSERT_ID();
        SELECT well_type_id FROM plate_layout, plate_layout_name  WHERE plate_layout.plate_layout_name_id = plate_layout_name.id AND plate_layout.well_type_id = 1 AND plate_layout.plate_layout_name_id = _plate_layout_name_id AND well_by_col=w INTO wt_id;
-      IF(spl_include,  --  check if it is an "unknown" well i.e. not a control
-         IF( wt_id = 1, new_sample(prj_id, NULL), NULL), NULL)
 
-SELECT CONCAT('wbc: ', wt_id) AS '';      
-      --      INSERT INTO well_sample(well_id, sample_id)VALUES(w_id, s_id)
-	 
+--  check if it is an "unknown" well i.e. not a control      
+      CASE 
+      WHEN spl_include THEN
+                        CASE 
+                        WHEN wt_id = 1 THEN CALL new_sample(prj_id, w_id, null);
+                        END CASE;
+	END CASE; 		
+      
+     
    SET w = w + 1;
    until  w > _plate_format_id END REPEAT;
 
@@ -98,7 +105,8 @@ END //
 DELIMITER ;
 
 
-call new_plate(1,1,96,1, TRUE);
+-- call new_plate(1,1,96,1, TRUE, @ps_id);
+SELECT @ps_id;
 
 
 SELECT * FROM sample;
@@ -107,122 +115,96 @@ SELECT * FROM plate;
 
 
 
------Plate_set-------------------------------------------
+-- ---Plate_set-------------------------------------------
+DROP PROCEDURE IF exists new_plate_set;
 
+DELIMITER  //
+CREATE procedure new_plate_set(_descr VARCHAR(30),_plate_set_name VARCHAR(30), _num_plates INTEGER, _plate_format_id INTEGER, _plate_type_id INTEGER, _project_id INTEGER, _plate_layout_name_id INTEGER, _with_samples BOOLEAN)
+BEGIN 
+   DECLARE  ps_id INTEGER;
+   DECLARE n_plates INTEGER DEFAULT _num_plates;
+   DECLARE p_type INTEGER DEFAULT _plate_type_id;
+   DECLARE p_form INTEGER DEFAULT _plate_format_id;
+   DECLARE prj_id INTEGER DEFAULT _project_id;
+   DECLARE plt_id INTEGER;
+   DECLARE play_n_id INTEGER DEFAULT _plate_layout_name_id;
+   DECLARE w_spls BOOLEAN DEFAULT _with_samples;
+   DECLARE plate_counter INTEGER DEFAULT 1;
 
-DROP FUNCTION IF exists new_plate_set(_descr VARCHAR(30), _plate_set_name VARCHAR(30), _num_plates INTEGER, _plate_format_id INTEGER,  _plate_type_id INTEGER, _project_id INTEGER, _plate_layout_name_id INTEGER, _with_samples boolean);
-
-CREATE OR REPLACE FUNCTION new_plate_set(_descr VARCHAR(30),_plate_set_name VARCHAR(30), _num_plates INTEGER, _plate_format_id INTEGER, _plate_type_id INTEGER, _project_id INTEGER, _plate_layout_name_id INTEGER, _with_samples boolean)
-  RETURNS integer AS
-$BODY$
-DECLARE
-   ps_id INTEGER;
-   n_plates INTEGER;
-   p_type INTEGER;
-   p_form INTEGER;
-   prj_id INTEGER;
-   plt_id INTEGER;
-   play_n_id INTEGER;
-   w_spls BOOLEAN := _with_samples;
-BEGIN
    
    INSERT INTO plate_set(descr, plate_set_name, num_plates, plate_format_id, plate_type_id, project_id, plate_layout_name_id)
-   VALUES (_descr, _plate_set_name, _num_plates, _plate_format_id, _plate_type_id, _project_id, _plate_layout_name_id )
-   RETURNING ID, plate_format_id, num_plates, project_id, plate_type_id, plate_layout_name_id INTO ps_id, p_form, n_plates, prj_id, p_type, play_n_id;
-   UPDATE plate_set SET plate_set_sys_name = 'PS-'||ps_id WHERE id=ps_id;
+   VALUES (_descr, _plate_set_name, _num_plates, _plate_format_id, _plate_type_id, _project_id, _plate_layout_name_id );
+   SET ps_id = LAST_INSERT_ID();
+   
+   UPDATE plate_set SET plate_set_sys_name = CONCAT('PS-',ps_id) WHERE id=ps_id;
 
-FOR i IN 1..n_plates loop
 	     -- _plate_type_id INTEGER, _plate_set_id INTEGER, _project_id INTEGER, _plate_format_id INTEGER, include_sample BOOLEAN
-	    SELECT new_plate(p_type, ps_id, p_form, play_n_id, w_spls) INTO plt_id;
-	    UPDATE plate_plate_set SET plate_order = i WHERE plate_set_id = ps_id AND plate_id = plt_id;
-
-END LOOP;
-
-RETURN ps_id;
-
-END;
-$BODY$
-  LANGUAGE plpgsql VOLATILE;
+REPEAT 
+CALL new_plate(p_type, ps_id, p_form, play_n_id, w_spls, @plt_id);
+	    UPDATE plate_plate_set SET plate_order = plate_counter WHERE plate_set_id = ps_id AND plate_id = (SELECT @plt_id);
 
 
+  SET plate_counter = plate_counter + 1;
+   until  plate_counter > n_plates END REPEAT;
+
+END //
+
+DELIMITER ;
 
 
---SELECT new_plate_set('using loop','ps-name-by-user',20,3,1,1,TRUE);
+-- call  new_plate_set('using loop','ps-name-by-user',5,3,1,1,1,TRUE);
+
 select COUNT(*) FROM plate;
 SELECT COUNT(*) FROM sample;
 SELECT COUNT(*) FROM well;
 
 -----Plate_set from group-------------------------------------------
 
-DROP FUNCTION IF exists new_plate_set_from_group(_descr VARCHAR(30), _plate_set_name VARCHAR(30), _num_plates INTEGER, _plate_format_id INTEGER,  _plate_type_id INTEGER, _project_id INTEGER, _plate_layout_name_id INTEGER);
+DROP PROCEDURE IF exists new_plate_set_from_group;
 
-CREATE OR REPLACE FUNCTION new_plate_set_from_group(_descr VARCHAR(30),_plate_set_name VARCHAR(30), _num_plates INTEGER, _plate_format_id INTEGER, _plate_type_id INTEGER, _project_id INTEGER, _plate_layout_name_id INTEGER)
-  RETURNS integer AS
-$BODY$
-DECLARE
-   ps_id INTEGER;
+DELIMITER  //
+CREATE procedure new_plate_set_from_group(IN _descr VARCHAR(30),IN _plate_set_name VARCHAR(30), IN _num_plates INTEGER, IN _plate_format_id INTEGER, IN _plate_type_id INTEGER, IN _project_id INTEGER, IN _plate_layout_name_id INTEGER, OUT ps_id INTEGER)
     
 BEGIN
    
    INSERT INTO plate_set(descr, plate_set_name, num_plates, plate_format_id, plate_type_id, project_id, plate_layout_name_id)
-   VALUES (_descr, _plate_set_name, _num_plates, _plate_format_id, _plate_type_id, _project_id, _plate_layout_name_id )
-   RETURNING id INTO ps_id;
-   UPDATE plate_set SET plate_set_sys_name = 'PS-'||ps_id WHERE id=ps_id;
+   VALUES (_descr, _plate_set_name, _num_plates, _plate_format_id, _plate_type_id, _project_id, _plate_layout_name_id );
+  SET ps_id= LAST_INSERT_ID();
+   UPDATE plate_set SET plate_set_sys_name = CONCAT('PS-',ps_id) WHERE id=ps_id;
 
-
-RETURN ps_id;
-
-
-END;
-$BODY$
-  LANGUAGE plpgsql VOLATILE;
+END //
+DELIMITER ;
 
 
 ---Get all sample IDs in a plate set
 
-DROP FUNCTION IF exists get_num_samples_for_plate_set( _plate_set_id INTEGER);
-CREATE OR REPLACE FUNCTION get_num_samples_for_plate_set(_plate_set_id INTEGER)
-  RETURNS INTEGER AS
-$BODY$
-DECLARE
-   psid int := _plate_set_id;
-   
-   counter INTEGER;
-   sql_statement VARCHAR;
-all_sample_ids INTEGER[];
-num_samples INTEGER;
-   
-BEGIN
+DROP PROCEDURE IF exists get_num_samples_for_plate_set;
 
-sql_statement := 'SELECT ARRAY(SELECT sample.id FROM plate, plate_plate_set, well, sample, well_sample WHERE plate_plate_set.plate_set_id = ' || psid || ' AND plate_plate_set.plate_id = plate.id AND well.plate_id = plate.id AND well_sample.well_id = well.id AND well_sample.sample_id = sample.id ORDER BY plate_plate_set.plate_id, plate_plate_set.plate_order, well.id)';
+DELIMITER //
+CREATE PROCEDURE get_num_samples_for_plate_set(IN _ps_id INTEGER, OUT num_samples INTEGER)
+BEGIN 
+DECLARE ps_id INTEGER DEFAULT _ps_id;
+SET num_samples = (SELECT count(*)  FROM plate, plate_plate_set, well, sample, well_sample WHERE plate_plate_set.plate_set_id = ps_id AND plate_plate_set.plate_id = plate.id AND well.plate_id = plate.id AND well_sample.well_id = well.id AND well_sample.sample_id = sample.id);
 
---    RAISE notice 'sql_statement: (%)', sql_statement;
+END //
+DELIMITER ;
 
-     EXECUTE sql_statement INTO all_sample_ids;
-     num_samples := array_length(all_sample_ids ,1); 
- -- RAISE notice 'ids: (%)', all_sample_ids;
- -- RAISE notice 'num: (%)', num_samples;
+-- call get_num_samples_for_plate_set(1, @num_samples); select @num_samples;
 
-RETURN num_samples;
-END;
-$BODY$
-  LANGUAGE plpgsql VOLATILE;
+-- https://federico-razzoli.com/json-arrays-in-mysql-mariadb
+-- associate multiple plate IDs with a plate set ID----------------------
 
+DROP PROCEDURE assoc_plate_ids_with_plate_set_id( _plate_ids INTEGER[], _plate_set_id INTEGER);
 
+CREATE PROCEDURE assoc_plate_ids_with_plate_set_id(_plate_ids int[], _plate_set_id int)
 
---associate multiple plate IDs with a plate set ID----------------------
-
-DROP FUNCTION IF exists assoc_plate_ids_with_plate_set_id( _plate_ids INTEGER[], _plate_set_id INTEGER);
-CREATE OR REPLACE FUNCTION assoc_plate_ids_with_plate_set_id(_plate_ids int[], _plate_set_id int)
-  RETURNS void AS
-$BODY$
+BEGIN 
 DECLARE
    pid int;
    plate_ids int[];
    counter INTEGER;
    sql_statement VARCHAR;
    
-BEGIN
 counter := 1;
 SELECT sort(_plate_ids) INTO plate_ids;
 sql_statement := 'INSERT INTO plate_plate_set (plate_set_id, plate_id, plate_order) VALUES ';
@@ -263,91 +245,6 @@ $BODY$
 
 
 
------Plate-----------------------
-
-DROP FUNCTION new_plate_old(INTEGER, INTEGER,INTEGER,INTEGER, BOOLEAN);
-
-CREATE OR REPLACE FUNCTION new_plate_old(_plate_type_id INTEGER, _plate_set_id INTEGER, _plate_format_id INTEGER, _plate_layout_name_id INTEGER,  _include_sample BOOLEAN)
-  RETURNS integer AS
-$BODY$
-DECLARE
-   plt_id INTEGER;
-   ps_id INTEGER = _plate_set_id;
-   pf_id INTEGER;
-   w_id INTEGER;
-   s_id INTEGER;
-   spl_include BOOLEAN := _include_sample;
-   row_holder   VARCHAR[] := ARRAY['A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','AA','AB','AC','AD','AE','AF'];
-   row_names VARCHAR[];
-   r VARCHAR(2);	
-   col_holder   VARCHAR[] := ARRAY['01','02','03','04','05','06','07','08','09','10','11','12','13','14','15','16','17','18','19','20','21','22','23','24','25','26','27','28','29','30','31','32','33','34','35','36','37','38','39','40','41','42','43','44','45','46','47','48'];
-   col_names VARCHAR[];
-   c VARCHAR(2);	
-
-BEGIN
---spl_include := _include_sample;
-
-   INSERT INTO plate(plate_type_id,   plate_format_id)
-   VALUES (_plate_type_id,  _plate_format_id)
-   RETURNING id  INTO plt_id;
-
-    UPDATE plate SET plate_sys_name = 'PLT-'||plt_id WHERE id=plt_id;
-
-
-CASE _plate_format_id
-   WHEN 96 THEN
-   row_names := row_holder[1:8];
-   col_names := col_holder[1:12];
-   WHEN 384 THEN
-   row_names := row_holder[1:16];
-   col_names := col_holder[1:24];
-   WHEN 1536 THEN
-   row_names := row_holder[1:32];
-   col_names := col_holder[1:48];
-   ELSE
-   END CASE;
-
-
-FOREACH c IN ARRAY col_names
-     LOOP
-   FOREACH r  IN ARRAY row_names
-   LOOP
-       INSERT INTO well(well_name, plate_id) VALUES(concat(r,c), plt_id)
-       RETURNING id INTO w_id;
-       
-       IF spl_include THEN
-       IF (SELECT by_col FROM well_numbers WHERE well_name = concat(r,c) AND well_numbers.plate_format = _plate_format_id) IN (SELECT well_by_col  FROM plate_layout, plate_layout_name  WHERE plate_layout.plate_layout_name_id = plate_layout_name.id AND plate_layout.well_type_id = 1 AND plate_layout.plate_layout_name_id = _plate_layout_name_id) THEN
-       INSERT INTO sample (sample_sys_name) VALUES (null)
-       RETURNING id INTO s_id;
-       UPDATE sample SET sample_sys_name = 'SPL-'||s_id WHERE id=s_id;
-
-       INSERT INTO well_sample(well_id, sample_id)VALUES(w_id, s_id);
-      END IF;
-       END IF;
-   END LOOP;
-   END LOOP;
-
-   INSERT INTO plate_plate_set(plate_set_id, plate_id)
-   VALUES (ps_id, plt_id );
-
-RETURN plt_id;
-
-END;
-$BODY$
-  LANGUAGE plpgsql VOLATILE;
-
-
-
---well name converted to by_col integer
-
-
-
-
-----Well--------------------------------------------
-
-
------Hits-----------------------
-
 -----Assay_run---------------------
 
 DROP FUNCTION new_assay_run(  VARCHAR(30), VARCHAR(30), INTEGER,  INTEGER, INTEGER);
@@ -370,15 +267,8 @@ END;
 $BODY$
   LANGUAGE plpgsql VOLATILE;
 
------assay_type----------------------------------------------------
-
------assay_result----------------------------------------------------------------
 
 
------plate_type----------------------------
-
-
---https://hub.packtpub.com/how-to-implement-dynamic-sql-in-postgresql-10/
 
 DROP FUNCTION get_ids_for_sys_names( VARCHAR[], VARCHAR(30), VARCHAR(30));
 
